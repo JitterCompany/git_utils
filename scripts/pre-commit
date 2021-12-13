@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+"""Git pre-commit hook"""
+
+
+import os
+import subprocess
+import sys
+import os.path
+
+
+FS_ENCODING = sys.getfilesystemencoding()
+
+# Blacklist: if any of these strings occur in a file, the commit is rejected.
+# Use cases:
+# 1. Prevent accidentally leakage of non-public info
+# 2. Guarantee that files can be used on another machine (esp. for auto-generated files that may contain hardcoded paths by default)
+str_blacklist = [
+        #'/home/myusername/',
+        ]
+mandatory_files = [
+        '.gitignore'
+        ]
+
+def check_blacklist(files):
+    for f in files:
+        with open(f, mode='rb') as source:
+            source = source.read()
+            for forbidden in str_blacklist:
+                if bytes(forbidden, 'utf-8') in source:
+                    print("Error: found blacklisted string '{}' in {}".format(forbidden, f))
+                    return False
+    return True
+
+
+def check_mandatory_files():
+    for f in mandatory_files:
+        if not os.path.isfile(f):
+            print("Error: mandatory file '{}' not present!".format(f))
+            return False
+    return True
+
+
+
+# NB: cmd_and_args is a list
+def run_command(cmd_and_args, files=[], **kwargs):
+    if files is None:
+        return
+    print('Running %s' % cmd_and_args[0])
+
+    return subprocess.check_output(cmd_and_args + files, stderr=subprocess.STDOUT, **kwargs).decode(FS_ENCODING)
+
+
+def filter_ext(extension, files, exclude=None):
+    files = [f for f in files if f.endswith(extension)]
+    if exclude is not None:
+        files = [i for i in files if exclude not in i]
+    return files
+
+
+def validate_files(changed_files):
+    changed_files = [i.strip() for i in changed_files.splitlines() if '/external/' not in i]
+
+
+    # TODO validate UTF-8 encoding
+
+    if not check_blacklist(changed_files):
+        return False
+
+    changed_extensions = {ext for root, ext in map(os.path.splitext, changed_files)}
+
+    # Rust source code
+    rust_files = filter_ext('.rs', changed_files)
+    if rust_files:
+        diff=run_command(['rustfmt', '--check', '--config', 'skip_children=false', '--files-with-diff'], rust_files)
+        if diff:
+            print("Error: file {} not formatted right: {}".format(rust, diff))
+            return False
+
+    return True
+
+def run_repo_specific_hook():
+
+    # If this file exists in the repository, it is executed
+    # and must result in exitcode 0 (SUCCESS)
+    hook = './.git-pre-commit'
+    if os.path.isfile(hook):
+        run_command([hook])
+    return True
+
+
+if __name__ == "__main__":
+    os.chdir(os.path.join(os.path.dirname(__file__), '..', '..'))
+    changed_files = subprocess.check_output('git diff --cached --name-only --diff-filter=ACM'.split())
+    changed_files = changed_files.decode(FS_ENCODING)
+
+    try:
+        ok = True
+        ok&= check_mandatory_files()
+        ok&= validate_files(changed_files)
+        ok&= run_repo_specific_hook()
+    except subprocess.CalledProcessError as exc:
+        print('Error: pre-commit: Quality check failed:', file=sys.stderr)
+        print(' '.join(exc.cmd), file=sys.stderr)
+        if exc.output:
+            output = exc.output.decode(FS_ENCODING)
+            print('\t', '\n\t'.join(output.splitlines()), sep='', file=sys.stderr)
+        sys.exit(1)
+
+    if not ok:
+        print("Error: pre-commit: Quality check failed!")
+        sys.exit(1)
+
+
