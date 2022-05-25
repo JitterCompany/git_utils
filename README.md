@@ -12,3 +12,10 @@ Note: templates work because ~/.gitconfig has the following:
 
 
 ```
+
+## How to install
+
+1. Clone this repostory
+2. Tell git where to look for git hooks: `git config --global core.hooksPath /path/to/this/repo/scripts`
+3. Git will now automatically run this hook and then look for `.git-pre-commit` files in a project for project specific hooks.
+
