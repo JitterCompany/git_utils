@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 import os.path
-
+from pathlib import Path
 
 FS_ENCODING = sys.getfilesystemencoding()
 
@@ -24,7 +24,10 @@ mandatory_files = [
 
 def check_blacklist(files):
     for f in files:
-        with open(f, mode='rb') as source:
+        p = Path(f)
+        if p.is_dir():
+            return True
+        with open(p, mode='rb') as source:
             source = source.read()
             for forbidden in str_blacklist:
                 if bytes(forbidden, 'utf-8') in source:
@@ -90,7 +93,7 @@ def run_repo_specific_hook():
 
 
 if __name__ == "__main__":
-    
+
     print("Running git hook for:", os.getcwd())
 
     changed_files = subprocess.check_output('git diff --cached --name-only --diff-filter=ACM'.split())
