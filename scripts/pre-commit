@@ -75,7 +75,7 @@ def validate_files(changed_files):
     # Rust source code
     rust_files = filter_ext('.rs', changed_files)
     if rust_files:
-        diff=run_command(['rustfmt', '--check', '--config', 'skip_children=false', '--files-with-diff'], rust_files)
+        diff=run_command(['rustfmt', '--check', '--config', 'skip_children=false', '--config', 'edition=2021', '--files-with-diff'], rust_files)
         if diff:
             print("Error: file {} not formatted right: {}".format(rust, diff))
             return False
